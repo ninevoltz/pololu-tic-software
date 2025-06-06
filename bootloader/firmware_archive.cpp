@@ -1,5 +1,6 @@
 #include "bootloader.h"
-#include <string_to_int.h>
+#include <cstdlib>
+#include <cerrno>
 #include "tinyxml2.h"
 #include <limits>
 #include <sstream>
@@ -40,10 +41,15 @@ static firmware_archive::block process_xml_block(
     throw std::runtime_error("A block is missing an address.");
   }
 
-  if (hex_string_to_int(address_c_str, &block.address))
+  char *end;
+  errno = 0;
+  unsigned long address = strtoul(address_c_str, &end, 16);
+  if (address_c_str[0] == '-' || *end != '\0' || end == address_c_str ||
+      errno == ERANGE || address > std::numeric_limits<uint32_t>::max())
   {
     throw std::runtime_error("A block has an invalid address.");
   }
+  block.address = static_cast<uint32_t>(address);
 
   // Get the contents.
   const char * contents_c_str = element->GetText();
@@ -93,10 +99,15 @@ static firmware_archive::image process_xml_firmware_image(
   {
     throw std::runtime_error("A firmware image is missing a product ID.");
   }
-  if (hex_string_to_int(product_c_str, &image.usb_product_id))
+  char *pid_end;
+  errno = 0;
+  unsigned long product = strtoul(product_c_str, &pid_end, 16);
+  if (product_c_str[0] == '-' || *pid_end != '\0' || pid_end == product_c_str ||
+      errno == ERANGE || product > std::numeric_limits<uint16_t>::max())
   {
     throw std::runtime_error("A firmware image has an invalid product ID.");
   }
+  image.usb_product_id = static_cast<uint16_t>(product);
 
   // FMI files don't store the vendor ID so we assume they are for Pololu
   // products.

@@ -1,4 +1,7 @@
 #include "cli.h"
+#include <cstdlib>
+#include <cerrno>
+#include <limits>
 
 static const char help[] =
   CLI_NAME ": Pololu Tic Command-line Utility\n"
@@ -205,25 +208,31 @@ static T parse_arg_int(arg_reader & arg_reader)
       "Expected a number after '" + std::string(arg_reader.last()) + "'.");
   }
 
-  T result;
-  uint8_t error = string_to_int(value_c, &result);
-  if (error == STRING_TO_INT_ERR_SMALL)
-  {
-    throw exception_with_exit_code(EXIT_BAD_ARGS,
-      "The number after '" + std::string(arg_reader.last()) + "' is too small.");
-  }
-  if (error == STRING_TO_INT_ERR_LARGE)
-  {
-    throw exception_with_exit_code(EXIT_BAD_ARGS,
-      "The number after '" + std::string(arg_reader.last()) + "' is too large.");
-  }
-  if (error)
+  char *end;
+  errno = 0;
+  long long value = strtoll(value_c, &end, 10);
+
+  if (end == value_c || *end != '\0')
   {
     throw exception_with_exit_code(EXIT_BAD_ARGS,
       "The number after '" + std::string(arg_reader.last()) + "' is invalid.");
   }
 
-  return result;
+  if ((errno == ERANGE && value == LLONG_MIN) ||
+      value < static_cast<long long>(std::numeric_limits<T>::min()))
+  {
+    throw exception_with_exit_code(EXIT_BAD_ARGS,
+      "The number after '" + std::string(arg_reader.last()) + "' is too small.");
+  }
+
+  if ((errno == ERANGE && value == LLONG_MAX) ||
+      value > static_cast<long long>(std::numeric_limits<T>::max()))
+  {
+    throw exception_with_exit_code(EXIT_BAD_ARGS,
+      "The number after '" + std::string(arg_reader.last()) + "' is too large.");
+  }
+
+  return static_cast<T>(value);
 }
 
 static std::string parse_arg_string(arg_reader & arg_reader)
